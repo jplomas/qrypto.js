@@ -41,6 +41,14 @@ describe('cryptoSign', () => {
 
     expect(Buffer.from(sigMessage, 'binary').toString('hex')).to.equal(SIGNATURE + MESSAGE);
   });
+  it('should throw if fails to sign due to invalid sk length', () => {
+    const msg = Buffer.from(MESSAGE, 'hex');
+    const sk = Buffer.from('000000000', 'hex');
+
+    expect(() => {
+      cryptoSign(msg, sk, false);
+    }).to.throw();
+  });
 });
 
 describe('cryptoSignOpen', () => {
@@ -54,12 +62,19 @@ describe('cryptoSignOpen', () => {
 });
 
 describe('cryptoSignVerify', () => {
-  it('should return true', () => {
+  it('should return true if verifies correctly', () => {
     const sig = Buffer.from(SIGNATURE, 'hex');
     const msg = Buffer.from(MESSAGE, 'hex');
     const pk = Buffer.from(PK, 'hex');
 
     expect(cryptoSignVerify(sig, msg, pk)).to.equal(true);
+  });
+  it('should return false if does not verify', () => {
+    const sig = Buffer.from('0000000000', 'hex');
+    const msg = Buffer.from(MESSAGE, 'hex');
+    const pk = Buffer.from(PK, 'hex');
+
+    expect(cryptoSignVerify(sig, msg, pk)).to.equal(false);
   });
 });
 
