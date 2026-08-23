@@ -74,10 +74,10 @@ versions to clear advisories, with every CI job green.
 
 `npm run check-lock` (CI lint job and the release preflight) asserts three
 things: every root override is applied to every non-bundled resolution in
-the tree; no workspace declares an override that disagrees with the root
-(npm honours `overrides` only from the workspace root, so those
-declarations are documentation at best); and the lockfile mirrors what each
-manifest declares.
+the tree; no workspace package.json declares `overrides` at all (npm
+honours them only from the workspace root, so a workspace-level block is
+inert — declare them in the root manifest); and the lockfile mirrors what
+each manifest declares.
 
 When it fails, **regenerate rather than patch** — `rm package-lock.json &&
 npm install` — then commit the result and re-run the check.

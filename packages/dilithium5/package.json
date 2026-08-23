@@ -76,10 +76,6 @@
   "dependencies": {
     "@noble/hashes": "2.3.0"
   },
-  "overrides": {
-    "diff": "8.0.4",
-    "minimatch": "10.2.6"
-  },
   "c8": {
     "include": [
       "src/**"

@@ -53,19 +53,14 @@ for (const [lockKey, entry] of Object.entries(lock.packages)) {
 }
 
 // 2. npm honours `overrides` only from the root of a workspace install, so a
-//    workspace declaring a different version states an intent nothing enforces.
+//    workspace-level block is inert: at best it duplicates the root, at worst
+//    it names a version nothing enforces. Overrides live in one place.
 for (const workspace of WORKSPACES) {
   const workspaceOverrides = readJson(`${workspace}/package.json`).overrides ?? {};
   for (const [name, version] of Object.entries(workspaceOverrides)) {
-    if (overrides[name] === undefined) {
-      errors.push(
-        `${workspace}/package.json overrides ${name}@${version}, which the root does not override — npm ignores workspace overrides, so this does nothing`
-      );
-    } else if (overrides[name] !== version) {
-      errors.push(
-        `${workspace}/package.json overrides ${name}@${version} but the root pins ${overrides[name]} — npm applies the root value, so this declaration is misleading`
-      );
-    }
+    errors.push(
+      `${workspace}/package.json overrides ${name}@${version} — npm ignores workspace overrides in a workspace install; declare it in the root package.json instead`
+    );
   }
 }
 
