@@ -223,10 +223,11 @@ Implications for auditors and dependency scanners:
 **Dependency-patch playbook (maintainers):** when `@noble/hashes` publishes
 a security fix, treat it as release-blocking: bump the dependency in both
 packages, run `npm run build` to regenerate `dist/`, and land it as a `fix:`
-commit so semantic-release publishes promptly. CI's `dist-check` job enforces
-that a dependency bump cannot merge without the rebuilt bundles — merging the
-bump is sufficient to guarantee the patched CJS artifacts ship with the
-resulting release. Then notify wallet.js maintainers to repeat the same
+commit so semantic-release publishes promptly. Two CI gates enforce this:
+`dist-check` stops a dependency bump merging without the rebuilt bundles, and
+`check-release-typing` stops one merging under a commit type that never
+publishes. Together they make merging the bump sufficient to guarantee the
+patched CJS artifacts ship with the resulting release. Then notify wallet.js maintainers to repeat the same
 playbook downstream.
 
 ---
