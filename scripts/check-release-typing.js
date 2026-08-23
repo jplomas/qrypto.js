@@ -24,10 +24,21 @@ const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'u
 const base = process.env.BASE_SHA || process.argv[2] || 'origin/main';
 const head = process.env.HEAD_SHA || process.argv[3] || 'HEAD';
 
+// GitHub reports the base branch's tip, which may have advanced past the point
+// this branch left it. `base..head` already counts commits from the merge base,
+// so the artifact snapshot has to come from there too — measured against a moved
+// tip, a change main made after the branch point reads as this PR reverting it.
+const mergeBase = git('merge-base', base, head);
+
 // Types that produce a release, per .releaserc.json releaseRules. A `!` marker
 // or a BREAKING CHANGE footer releases whatever the type is.
 const RELEASING_TYPES = new Set(['feat', 'fix', 'perf']);
-const SKIP_TOKEN = '[skip-release-check]';
+
+// A trailer, not a loose token: a bare marker matches any commit that merely
+// mentions it — a revert, a doc change, or the commit that introduced this
+// check — silently disabling the gate for the whole PR. Requiring a line-start
+// trailer with a reason means opting out has to be deliberate and explained.
+const SKIP_TRAILER = /^Skip-Release-Check:[ \t]*(?<reason>\S.*)$/m;
 
 const releases = (message) => {
   const header = message.split('\n', 1)[0];
@@ -52,9 +63,10 @@ if (commits.length === 0) {
   process.exit(0);
 }
 
-const skipped = commits.find((commit) => commit.message.includes(SKIP_TOKEN));
+const skipped = commits.find((commit) => SKIP_TRAILER.test(commit.message));
 if (skipped) {
-  console.log(`${SKIP_TOKEN} found in ${skipped.sha.slice(0, 7)}; release-typing check skipped.`);
+  const { reason } = skipped.message.match(SKIP_TRAILER).groups;
+  console.log(`Skip-Release-Check on ${skipped.sha.slice(0, 7)}: ${reason.trim()}`);
   process.exit(0);
 }
 
@@ -75,7 +87,7 @@ const checked = [];
 for (const pkg of publishablePackages()) {
   const reasons = [];
 
-  const before = runtimeDependencies(base, pkg.path);
+  const before = runtimeDependencies(mergeBase, pkg.path);
   const after = runtimeDependencies(head, pkg.path);
   for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (before[name] !== after[name]) {
@@ -83,7 +95,7 @@ for (const pkg of publishablePackages()) {
     }
   }
 
-  const bundleChanged = git('diff', '--name-only', `${base}..${head}`, '--', `${pkg.path}/dist/cjs`);
+  const bundleChanged = git('diff', '--name-only', `${mergeBase}..${head}`, '--', `${pkg.path}/dist/cjs`);
   if (bundleChanged) reasons.push('the published CJS bundle changed');
 
   if (reasons.length === 0) continue;
@@ -114,7 +126,8 @@ if (errors.length > 0) {
       '\nchange is already committed, add a releasing commit that touches each package:' +
       '\n\n  npm run release:touch-packages' +
       `\n  git commit -m "fix: <what now ships>"` +
-      `\n\nIf the change genuinely should not publish, put ${SKIP_TOKEN} in a commit message.\n`
+      '\n\nIf the change genuinely should not publish, add a commit trailer:' +
+      '\n\n  Skip-Release-Check: <why this must not publish>\n'
   );
   process.exit(1);
 }
