@@ -38,7 +38,7 @@ jobs:
           # The action defaults to `version: latest`, which lets the gate's
           # behavior change overnight with no repo diff. Pin the engine like
           # any other verification input; bump deliberately.
-          version: 1.7.10
+          version: 1.7.12
 
   zizmor:
     name: zizmor (Actions security analysis)
