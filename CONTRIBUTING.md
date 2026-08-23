@@ -34,8 +34,9 @@ on the old copy. `npm run check-release-typing` (a PR-only CI job) fails
 when a package's runtime `dependencies` or `dist/cjs/` changed between the
 PR's base and head without a releasing commit touching that package. When
 the change is already committed, `npm run release:touch-packages` plus a
-`fix:` commit gives each package something to release; `[skip-release-check]`
-in a commit message opts out deliberately.
+`fix:` commit gives each package something to release. To opt out for a
+change that genuinely must not publish, add a commit trailer reading
+`Skip-Release-Check:` followed by the reason.
 
 ## Invariant: shared files stay byte-identical
 
