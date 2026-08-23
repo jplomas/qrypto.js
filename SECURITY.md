@@ -226,8 +226,7 @@ packages, run `npm run build` to regenerate `dist/`, and land it as a `fix:`
 commit so semantic-release publishes promptly. Two CI gates enforce this:
 `dist-check` stops a dependency bump merging without the rebuilt bundles, and
 `check-release-typing` stops one merging under a commit type that never
-publishes (the failure mode that left `@noble/hashes` 2.3.0 built but
-unreleased). Together they make merging the bump sufficient to guarantee the
+publishes. Together they make merging the bump sufficient to guarantee the
 patched CJS artifacts ship with the resulting release. Then notify wallet.js maintainers to repeat the same
 playbook downstream.
 
