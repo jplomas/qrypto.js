@@ -13,6 +13,7 @@ npm test            # all tests, both packages (450+)
 npm run lint        # eslint + prettier
 npm run build       # rollup dual ESM/CJS builds into dist/
 npm run check-shared  # shared-file sync check (see below)
+npm run check-lock  # package-lock.json matches the manifests (see below)
 npm run typecheck   # consumer-compile gate for the shipped typings
 ```
 
@@ -60,6 +61,26 @@ fuzzer's src↔dist agreement oracle.
 Note: the CJS build **bundles** `@noble/hashes` (it is ESM-only). See
 SECURITY.md "Bundled Dependencies in the CJS Artifact" for the
 dependency-patch playbook this implies.
+
+## Invariant: package-lock.json reflects the manifests
+
+`npm ci` rejects a lockfile whose dependency list drifted from
+`package.json`, but it does **not** notice a lockfile that ignores the root
+`overrides` block — and a plain `npm install` will not repair one, because
+it keeps any resolution that already satisfies its parent's range. This
+repo shipped exactly that: a lockfile resolving `diff@7.0.0` and
+`serialize-javascript@6.0.2` while the root overrides named the patched
+versions to clear advisories, with every CI job green.
+
+`npm run check-lock` (CI lint job and the release preflight) asserts three
+things: every root override is applied to every non-bundled resolution in
+the tree; no workspace package.json declares `overrides` at all (npm
+honours them only from the workspace root, so a workspace-level block is
+inert — declare them in the root manifest); and the lockfile mirrors what
+each manifest declares.
+
+When it fails, **regenerate rather than patch** — `rm package-lock.json &&
+npm install` — then commit the result and re-run the check.
 
 ## Updating pinned verification upstreams
 
@@ -262,6 +283,7 @@ documented symbol, so this list and the shipped typings can't silently drift.
 - [ ] `npm test` green (both packages)
 - [ ] `npm run lint` clean
 - [ ] `npm run check-shared` passes (if you touched a shared file: edited both packages)
+- [ ] `npm run check-lock` passes (if you touched any `package.json`: lockfile regenerated)
 - [ ] `npm run typecheck` clean (if you touched `src/index.d.ts` or the documented API)
 - [ ] `npm run build` run and `dist/` changes committed (if you touched `src/`)
 - [ ] Conventional-commit message with the intended release semantics
