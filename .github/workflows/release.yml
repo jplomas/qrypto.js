@@ -106,13 +106,14 @@ jobs:
           fi
 
       - name: Setup Node.js
-        # Exact-pinned so release analysis always runs on one fixed toolchain.
-        # (This job runs semantic-release; it does not publish, and no longer
-        # needs to match the publish job's Node — that job now gets npm 11
-        # from its own bundled Node rather than self-installing.)
+        # Exact-pinned so release analysis always runs on one fixed toolchain,
+        # on the same major as preflight ('22.x') so the dist rebuilt here
+        # matches the dist preflight verified as clean. 22.23.2 satisfies the
+        # `^22.22.2 || >=24.15` engines floor that @semantic-release/changelog
+        # and @semantic-release/git declare.
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.14.0
+          node-version: 22.23.2
 
       - name: Install dependencies
         run: npm ci
@@ -261,13 +262,15 @@ jobs:
     # the released bytes.
     steps:
       - name: Setup Node.js
-        # Node 24 LTS bundles npm 11 (11.17.0 here), so the npm that publishes
-        # arrives inside the checksum-verified Node tarball — nothing is
-        # fetched ad hoc. Node 22 ships npm 10, which predates trusted
-        # publishing; that gap is why this job used to self-install npm.
+        # The npm that publishes arrives inside the checksum-verified Node
+        # tarball — nothing is fetched ad hoc. Node 22 ships npm 10, which
+        # predates trusted publishing; that gap is why this job used to
+        # self-install npm. 26.7.0 bundles npm 11.19.0, matching the root
+        # `overrides.npm` pin. Node 26 is Current until it becomes Active LTS
+        # on 2026-10-28 (supported to 2029-04-30).
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.19.0
+          node-version: 26.7.0
           registry-url: https://registry.npmjs.org/
 
       - name: Verify bundled npm supports trusted publishing
