@@ -31,6 +31,8 @@ jobs:
       - run: npm run lint
       - name: Shared-file sync (dilithium5 ↔ mldsa87)
         run: npm run check-shared
+      - name: Lockfile reflects the manifests (overrides actually applied)
+        run: npm run check-lock
       - name: Typings compile gate (consumer-compile against shipped dist .d.ts)
         run: npm run typecheck
 

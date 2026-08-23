@@ -11,6 +11,7 @@
     "test": "FORCE_COLOR=0 turbo test",
     "test:browser": "playwright install chromium && turbo run test:browser",
     "check-shared": "node scripts/check-shared-files.js",
+    "check-lock": "node scripts/check-lockfile.js",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p test/types/tsconfig.json",
