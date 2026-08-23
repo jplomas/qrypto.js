@@ -13,6 +13,14 @@ updates:
           - "*"
         exclude-patterns:
           - "turbo"
+    ignore:
+      # conventional-changelog-conventionalcommits@10 dropped its handlebars
+      # templates and requires conventional-changelog-writer@9. semantic-release
+      # 25 still pins writer ^8 (via commit-analyzer/release-notes-generator),
+      # so the v10 preset fails generateNotes. Unpin once semantic-release ships
+      # a release-notes-generator built on writer 9.
+      - dependency-name: "conventional-changelog-conventionalcommits"
+        versions: [">=10"]
     commit-message:
       prefix: "deps"
 
