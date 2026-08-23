@@ -27,6 +27,17 @@ Releases are fully automated from conventional commits on `main`
 `test:`, `ci:`, `deps:`, `build:`) does not release. The two packages
 version independently — a commit touching shared files releases both.
 
+That last rule has teeth, because the CJS bundles embed `@noble/hashes`:
+a runtime dependency bumped under `deps:`/`build:` rebuilds the bundle,
+passes dist-check, merges — and never reaches npm, leaving CJS consumers
+on the old copy. `npm run check-release-typing` (a PR-only CI job) fails
+when a package's runtime `dependencies` or `dist/cjs/` changed between the
+PR's base and head without a releasing commit touching that package. When
+the change is already committed, `npm run release:touch-packages` plus a
+`fix:` commit gives each package something to release. To opt out for a
+change that genuinely must not publish, add a commit trailer reading
+`Skip-Release-Check:` followed by the reason.
+
 ## Invariant: shared files stay byte-identical
 
 The two packages deliberately duplicate their common modules so each npm
@@ -287,5 +298,6 @@ documented symbol, so this list and the shipped typings can't silently drift.
 - [ ] `npm run typecheck` clean (if you touched `src/index.d.ts` or the documented API)
 - [ ] `npm run build` run and `dist/` changes committed (if you touched `src/`)
 - [ ] Conventional-commit message with the intended release semantics
+- [ ] `npm run check-release-typing` passes (if you changed a runtime dep or `dist/cjs/`: typed to release)
 - [ ] Security-relevant change? Update SECURITY.md and consider the
       dependency-patch playbook / downstream wallet.js implications

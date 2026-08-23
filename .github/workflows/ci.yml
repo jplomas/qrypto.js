@@ -53,6 +53,28 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  release-typing:
+    name: Shipped changes carry a releasing commit type
+    # PR-only: the check compares the PR's base with its head. On a push to
+    # main the merge has already happened and there is nothing left to gate.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the check walks base..head commit by commit.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.x'
+      - name: Runtime deps and CJS bundles ship, or fail loudly
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run check-release-typing
+
   dist-check:
     name: Verify dist/ is up to date
     runs-on: ubuntu-latest
