@@ -1,3 +1,9 @@
+## @theqrl/mldsa87 [2.1.4](https://github.com/theQRL/qrypto.js/compare/@theqrl/mldsa87@2.1.3...@theqrl/mldsa87@2.1.4) (2026-08-23)
+
+### Bug Fixes
+
+* bundle @noble/hashes 2.3.0 in the CJS artifacts ([81902fc](https://github.com/theQRL/qrypto.js/commit/81902fc8a81f199951088b52149dcd5fa5342b9e))
+
 ## @theqrl/mldsa87 [2.1.3](https://github.com/theQRL/qrypto.js/compare/@theqrl/mldsa87@2.1.2...@theqrl/mldsa87@2.1.3) (2026-06-13)
 
 ### Bug Fixes
