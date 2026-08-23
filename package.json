@@ -50,7 +50,6 @@
     "serialize-javascript": "7.1.0",
     "minimatch": "10.2.6",
     "tar": "7.5.22",
-    "diff": "8.0.4",
-    "npm": "11.19.0"
+    "diff": "8.0.4"
   }
 }

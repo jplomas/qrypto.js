@@ -265,9 +265,8 @@ jobs:
         # The npm that publishes arrives inside the checksum-verified Node
         # tarball — nothing is fetched ad hoc. Node 22 ships npm 10, which
         # predates trusted publishing; that gap is why this job used to
-        # self-install npm. 26.7.0 bundles npm 11.19.0, matching the root
-        # `overrides.npm` pin. Node 26 is Current until it becomes Active LTS
-        # on 2026-10-28 (supported to 2029-04-30).
+        # self-install npm. 26.7.0 bundles npm 11.19.0. Node 26 is Current
+        # until it becomes Active LTS on 2026-10-28 (supported to 2029-04-30).
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26.7.0
