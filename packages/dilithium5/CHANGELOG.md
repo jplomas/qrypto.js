@@ -1,3 +1,9 @@
+## @theqrl/dilithium5 [1.2.4](https://github.com/theQRL/qrypto.js/compare/@theqrl/dilithium5@1.2.3...@theqrl/dilithium5@1.2.4) (2026-08-23)
+
+### Bug Fixes
+
+* bundle @noble/hashes 2.3.0 in the CJS artifacts ([81902fc](https://github.com/theQRL/qrypto.js/commit/81902fc8a81f199951088b52149dcd5fa5342b9e))
+
 ## @theqrl/dilithium5 [1.2.3](https://github.com/theQRL/qrypto.js/compare/@theqrl/dilithium5@1.2.2...@theqrl/dilithium5@1.2.3) (2026-06-13)
 
 ### Bug Fixes
