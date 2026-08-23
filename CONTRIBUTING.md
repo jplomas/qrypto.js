@@ -79,7 +79,8 @@ The full matrix (a pin missing from this table is a bug):
 | `PQCRYSTALS_DILITHIUM5_PIN` | cross-verify.yml `env:` | C reference (Round 3) | **frozen** |
 | go-qrllib `v0.9.0` | `.github/cross-verify/mldsa87-go/go.mod` | resolves the ML-DSA-87 JS→Go *verify* leg | bump together with `GO_QRLLIB_MLDSA87_PIN` |
 | go-qrllib `v0.1.3-0.20260108…` | `.github/cross-verify/dilithium5-go/go.mod` | resolves the Dilithium5 JS→Go *verify* leg (pre-removal snapshot) | **frozen** (go-qrllib only — see note) |
-| `npm@11.19.0` | release.yml publish job + root `overrides.npm` | the npm CLI doing trusted publishing | bump together, exact |
+| Node `24.19.0` | release.yml publish job | the npm CLI doing trusted publishing — bundled with the pinned Node, never installed ad hoc | bump deliberately; bundled npm must stay ≥ 11.5.1 |
+| `npm@11.19.0` | root `overrides.npm` | npm resolved inside `@semantic-release/npm`'s dev tree | bump routinely (advisories) |
 | actionlint `version: 1.7.12` | actionlint.yml | the linter engine inside the pinned action (defaults to `latest` otherwise) | bump deliberately |
 | zizmor engine | zizmor-action (SHA-pinned) | digest-pins its own engine — no extra pin needed | follows action SHA |
 | GitHub SSH host keys | release.yml "Configure Git for SSH" | pinned `known_hosts` for the deploy-key push channel (no TOFU keyscan) | re-verify against https://api.github.com/meta if GitHub rotates |
