@@ -52,6 +52,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run check-shared
+      - run: npm run check-lock
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -106,13 +107,14 @@ jobs:
           fi
 
       - name: Setup Node.js
-        # Pinned to 22.14.0 to match the bundled npm version that can cleanly
-        # self-update to npm 11 in the publish job. Newer Node 22.x patches
-        # ship an npm where the global self-install corrupts its own
-        # node_modules (missing promise-retry).
+        # Exact-pinned so release analysis always runs on one fixed toolchain,
+        # on the same major as preflight ('22.x') so the dist rebuilt here
+        # matches the dist preflight verified as clean. 22.23.2 satisfies the
+        # `^22.22.2 || >=24.15` engines floor that @semantic-release/changelog
+        # and @semantic-release/git declare.
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.14.0
+          node-version: 22.23.2
 
       - name: Install dependencies
         run: npm ci
@@ -261,18 +263,27 @@ jobs:
     # the released bytes.
     steps:
       - name: Setup Node.js
+        # The npm that publishes arrives inside the checksum-verified Node
+        # tarball — nothing is fetched ad hoc. Node 22 ships npm 10, which
+        # predates trusted publishing; that gap is why this job used to
+        # self-install npm. 26.7.0 bundles npm 11.19.0. Node 26 is Current
+        # until it becomes Active LTS on 2026-10-28 (supported to 2029-04-30).
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.14.0
+          node-version: 26.7.0
           registry-url: https://registry.npmjs.org/
 
-      - name: Use npm 11 for trusted publishing
-        # Exact-pinned: this is the most privileged job in the repo
-        # (id-token: write) and a floating range here resolves at publish
-        # time. Keep in sync with the root package.json `overrides.npm` pin.
+      - name: Verify bundled npm supports trusted publishing
+        env:
+          NPM_MIN: 11.5.1
         run: |
-          npm install -g npm@11.17.0
-          npm --version
+          set -euo pipefail
+          installed="$(npm --version)"
+          echo "npm ${installed}"
+          if [ "$(printf '%s\n%s\n' "${NPM_MIN}" "${installed}" | sort -V | head -1)" != "${NPM_MIN}" ]; then
+            echo "::error::npm ${installed} predates trusted publishing (needs >= ${NPM_MIN}); the pinned Node bundles the wrong npm."
+            exit 1
+          fi
 
       - name: Download release candidate tarballs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -347,7 +358,7 @@ jobs:
           artifact-name: sbom-cyclonedx.json
 
       - name: Attest release artefacts
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/tarballs/*.tgz

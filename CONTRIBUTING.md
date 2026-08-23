@@ -13,6 +13,8 @@ npm test            # all tests, both packages (450+)
 npm run lint        # eslint + prettier
 npm run build       # rollup dual ESM/CJS builds into dist/
 npm run check-shared  # shared-file sync check (see below)
+npm run check-lock  # package-lock.json matches the manifests (see below)
+npm run typecheck   # consumer-compile gate for the shipped typings
 ```
 
 Node ≥ 20.19 (`.nvmrc` says 22). CI tests on Node 20.x, 22.x, and 24.x.
@@ -20,10 +22,10 @@ Node ≥ 20.19 (`.nvmrc` says 22). CI tests on Node 20.x, 22.x, and 24.x.
 ## Commit messages drive releases
 
 Releases are fully automated from conventional commits on `main`
-(see [RELEASE.md](RELEASE.md)): `fix:` → patch, `feat:` → minor,
-`feat!:`/`BREAKING CHANGE:` → major; `chore:`/`docs:`/`test:`/`ci:` do not
-release. The two packages version independently — a commit touching shared
-files releases both.
+(see [RELEASE.md](RELEASE.md)): `fix:`/`perf:` → patch, `feat:` → minor,
+`feat!:`/`BREAKING CHANGE:` → major; everything else (`chore:`, `docs:`,
+`test:`, `ci:`, `deps:`, `build:`) does not release. The two packages
+version independently — a commit touching shared files releases both.
 
 ## Invariant: shared files stay byte-identical
 
@@ -60,6 +62,26 @@ Note: the CJS build **bundles** `@noble/hashes` (it is ESM-only). See
 SECURITY.md "Bundled Dependencies in the CJS Artifact" for the
 dependency-patch playbook this implies.
 
+## Invariant: package-lock.json reflects the manifests
+
+`npm ci` rejects a lockfile whose dependency list drifted from
+`package.json`, but it does **not** notice a lockfile that ignores the root
+`overrides` block — and a plain `npm install` will not repair one, because
+it keeps any resolution that already satisfies its parent's range. This
+repo shipped exactly that: a lockfile resolving `diff@7.0.0` and
+`serialize-javascript@6.0.2` while the root overrides named the patched
+versions to clear advisories, with every CI job green.
+
+`npm run check-lock` (CI lint job and the release preflight) asserts three
+things: every root override is applied to every non-bundled resolution in
+the tree; no workspace package.json declares `overrides` at all (npm
+honours them only from the workspace root, so a workspace-level block is
+inert — declare them in the root manifest); and the lockfile mirrors what
+each manifest declares.
+
+When it fails, **regenerate rather than patch** — `rm package-lock.json &&
+npm install` — then commit the result and re-run the check.
+
 ## Updating pinned verification upstreams
 
 CI resolves external code through more mechanisms than `git clone` — Go
@@ -78,8 +100,9 @@ The full matrix (a pin missing from this table is a bug):
 | `PQCRYSTALS_DILITHIUM5_PIN` | cross-verify.yml `env:` | C reference (Round 3) | **frozen** |
 | go-qrllib `v0.9.0` | `.github/cross-verify/mldsa87-go/go.mod` | resolves the ML-DSA-87 JS→Go *verify* leg | bump together with `GO_QRLLIB_MLDSA87_PIN` |
 | go-qrllib `v0.1.3-0.20260108…` | `.github/cross-verify/dilithium5-go/go.mod` | resolves the Dilithium5 JS→Go *verify* leg (pre-removal snapshot) | **frozen** (go-qrllib only — see note) |
-| `npm@11.17.0` | release.yml publish job + root `overrides.npm` | the npm CLI doing trusted publishing | bump together, exact |
-| actionlint `version: 1.7.10` | actionlint.yml | the linter engine inside the pinned action (defaults to `latest` otherwise) | bump deliberately |
+| Node `26.7.0` | release.yml publish job | supplies the npm CLI doing trusted publishing (bundles npm 11.19.0) — never installed ad hoc | bump deliberately; bundled npm must stay ≥ 11.5.1 |
+| Node `22.23.2` | release.yml prepare job | toolchain running semantic-release and the pre-publish build | bump deliberately; must satisfy the release plugins' engines |
+| actionlint `version: 1.7.12` | actionlint.yml | the linter engine inside the pinned action (defaults to `latest` otherwise) | bump deliberately |
 | zizmor engine | zizmor-action (SHA-pinned) | digest-pins its own engine — no extra pin needed | follows action SHA |
 | GitHub SSH host keys | release.yml "Configure Git for SSH" | pinned `known_hosts` for the deploy-key push channel (no TOFU keyscan) | re-verify against https://api.github.com/meta if GitHub rotates |
 
@@ -142,10 +165,11 @@ and `--iterations` are mutually exclusive.
 Two paired layers (playbook §7): **source-level browser execution** — the
 full vector suite runs in Chromium via Playwright (`packages/*/browser-tests/`,
 `npm run test:browser`); and **published-artifact packaging** —
-`test/dist-bundle.test.js` imports the built `dist/{mjs,cjs}` in subprocesses,
-and the release smoke job (`scripts/release/smoke-tarballs.js`) installs the
-**packed `.tgz`** (the artifact handed to `publish`, not a rebuild) into
-throwaway CJS + ESM projects. So the thing tested is the thing shipped.
+`packages/*/test/dist-bundle.test.js` imports the built `dist/{mjs,cjs}` in
+subprocesses, and the release smoke job
+(`scripts/release/smoke-tarballs.js`) installs the **packed `.tgz`** (the
+artifact handed to `publish`, not a rebuild) into throwaway CJS + ESM
+projects. So the thing tested is the thing shipped.
 
 **Rev-4 bundler matrix (Parcel/webpack/Rollup in Chromium) — waived this
 cycle.** Rollup compat is already proven (it builds `dist/`), the source
@@ -259,6 +283,8 @@ documented symbol, so this list and the shipped typings can't silently drift.
 - [ ] `npm test` green (both packages)
 - [ ] `npm run lint` clean
 - [ ] `npm run check-shared` passes (if you touched a shared file: edited both packages)
+- [ ] `npm run check-lock` passes (if you touched any `package.json`: lockfile regenerated)
+- [ ] `npm run typecheck` clean (if you touched `src/index.d.ts` or the documented API)
 - [ ] `npm run build` run and `dist/` changes committed (if you touched `src/`)
 - [ ] Conventional-commit message with the intended release semantics
 - [ ] Security-relevant change? Update SECURITY.md and consider the
