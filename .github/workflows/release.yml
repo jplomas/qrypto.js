@@ -183,6 +183,12 @@ jobs:
             (cd "${package_path}" && npm pack --pack-destination "${tarball_dir}")
           done < .release/released-packages.tsv
           cp .release/released-packages.json .release/released-packages.tsv dist/
+          # The smoke runner ships inside the artifact so the smoke job needs
+          # no checkout of its own — see the note on that job. Renamed to
+          # .mjs on the way: with no checkout there is no package.json
+          # declaring "type": "module", and this marks the ESM script as ESM
+          # outright rather than leaning on Node's syntax detection.
+          cp scripts/release/smoke-tarballs.js dist/smoke-tarballs.mjs
 
       - name: Generate checksums
         if: steps.released.outputs.released == 'true'
@@ -202,6 +208,7 @@ jobs:
             dist/released-packages.tsv
             dist/checksums-sha256.txt
             dist/checksums-sha512.txt
+            dist/smoke-tarballs.mjs
           retention-days: 5
 
   # ===========================================================================
@@ -211,19 +218,19 @@ jobs:
   # ===========================================================================
   smoke-node20:
     name: Smoke Tarballs (Node 20)
-    needs: [preflight, prepare]
+    needs: prepare
     if: needs.prepare.outputs.released == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # No checkout: like `publish`, this job operates exclusively on the
+    # artifact handoff — tarballs, manifest and the smoke runner all come
+    # from the tree `prepare` validated. Re-checking out a ref carried in a
+    # job output would run repository code in a default-branch-privileged
+    # context (workflow_dispatch), which is a cache-poisoning sink; taking
+    # the runner from the artifact removes that path and keeps the bytes
+    # under test bound to the bytes that were packed.
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The SHA preflight validated — not floating `main`, which may have
-          # advanced while this run was queued. Only scripts/ is used here;
-          # the packages under test come from the artifact handoff.
-          ref: ${{ needs.preflight.outputs.sha }}
-          persist-credentials: false
-
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -236,7 +243,7 @@ jobs:
           path: dist
 
       - name: Smoke test packed tarballs
-        run: node scripts/release/smoke-tarballs.js dist/released-packages.tsv dist/tarballs
+        run: node dist/smoke-tarballs.mjs dist/released-packages.tsv dist/tarballs
 
   # ===========================================================================
   # Publish: download the prepared tarballs and publish each with npm trusted
