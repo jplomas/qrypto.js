@@ -180,7 +180,9 @@ full vector suite runs in Chromium via Playwright (`packages/*/browser-tests/`,
 subprocesses, and the release smoke job
 (`scripts/release/smoke-tarballs.js`) installs the **packed `.tgz`** (the
 artifact handed to `publish`, not a rebuild) into throwaway CJS + ESM
-projects. So the thing tested is the thing shipped.
+projects. So the thing tested is the thing shipped. The runner is copied
+into that artifact as `smoke-tarballs.mjs`, so the smoke job needs no
+checkout of its own.
 
 **Rev-4 bundler matrix (Parcel/webpack/Rollup in Chromium) — waived this
 cycle.** Rollup compat is already proven (it builds `dist/`), the source
