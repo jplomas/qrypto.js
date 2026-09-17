@@ -2036,7 +2036,7 @@ function cryptoSignKeypair(passedSeed, pk, sk) {
 // that probability does not depend on the key as long as s1 and s2 are in
 // range, which secretKeyVecsInRange guarantees. The chance that a valid key
 // needs more than 1024 attempts is below 0.74^1024 < 2^-440, so the bound
-// never fires in honest use. It exists so that a secret key whose other
+// is not expected to fire in honest use. It exists so that a secret key whose other
 // fields are adversarial (a t0 chosen so that most attempts need more than
 // OMEGA hints) throws instead of spinning. go-qrllib and rust-qrllib use
 // the same bound.
@@ -2083,7 +2083,7 @@ const SIGN_MAX_ATTEMPTS = 1024;
  * @throws {Error} If ctx exceeds 255 bytes
  * @throws {Error} If sk length does not equal CryptoSecretKeyBytes
  * @throws {Error} If an s1 or s2 coefficient of sk is outside [-ETA, ETA] (see [validateSecretKey])
- * @throws {Error} If no signature is accepted within 1024 attempts (never for a key from [cryptoSignKeypair])
+ * @throws {Error} If no signature is accepted within 1024 attempts (a below-2^-440 event for a key from [cryptoSignKeypair])
  * @throws {Error} If message is not a Uint8Array or valid hex string
  *
  * @example

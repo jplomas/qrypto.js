@@ -112,7 +112,7 @@ Create a detached signature.
 - `randomized`: `boolean` - `true` for hedged, `false` for deterministic
 - `context`: `Uint8Array` - context string for domain separation, 0-255 bytes
 - Returns: `0` on success
-- Throws: `Error` if `sk` has an s1 or s2 coefficient outside `[-2, 2]` (see [Secret Key Validation](#secret-key-validation)), or if no signature is accepted within 1024 attempts, which does not happen for a key from `cryptoSignKeypair`
+- Throws: `Error` if `sk` has an s1 or s2 coefficient outside `[-2, 2]` (see [Secret Key Validation](#secret-key-validation)), or if no signature is accepted within 1024 attempts, a below-2^-440 event for a key from `cryptoSignKeypair`
 
 #### `cryptoSignVerify(sig, message, pk, context)`
 

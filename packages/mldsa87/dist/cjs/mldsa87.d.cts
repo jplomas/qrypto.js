@@ -67,7 +67,8 @@ export function cryptoSignKeypair(
  * @returns 0 on success
  * @throws Error if sk is wrong size, an s1 or s2 coefficient of sk is out of
  *   range (see `validateSecretKey`), context is too long, or no signature is
- *   accepted within 1024 attempts (never for a key from `cryptoSignKeypair`)
+ *   accepted within 1024 attempts (a below-2^-440 event for a key from
+ *   `cryptoSignKeypair`)
  */
 export function cryptoSignSignature(
   sig: Uint8Array,
