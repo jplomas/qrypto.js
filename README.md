@@ -334,6 +334,7 @@ See [SECURITY.md](./SECURITY.md) for important security information, including:
 - **Randomness:** Uses Web Crypto API (`crypto.getRandomValues()`) exclusively. Throws if unavailable. Includes basic entropy validation to detect broken RNG implementations.
 - **Key handling:** Recommendations for secure key storage and disposal
 - **Public key validation (ML-DSA-87):** the verifier does not reject weak keys, as FIPS 204 requires; check keys you receive with `validatePublicKey`
+- **Secret key validation (ML-DSA-87):** signing throws on a key whose s1 or s2 encoding is out of range; `validateSecretKey` is the same check ahead of time
 
 ## Development
 

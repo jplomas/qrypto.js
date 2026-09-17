@@ -183,6 +183,18 @@ keys received from outside with
 apply the same rule, described in the
 [package README](./packages/mldsa87/README.md#public-key-validation).
 
+### Secret Key Validation (ML-DSA-87)
+
+The s1 and s2 coefficients of a packed secret key are 3-bit fields; 5, 6
+and 7 are not encodings key generation writes, and a coefficient outside
+`[-2, 2]` breaks the norm bound the signing loop relies on for its
+zero-knowledge property. Every signing function checks s1 and s2 after
+unpacking and throws on such a key; `validateSecretKey(sk)` is the same
+check ahead of time. The rejection loop is bounded to 1024 attempts, a
+below-2^-440 event for a key that passes the check. go-qrllib and
+rust-qrllib apply the same check and bound; see the
+[package README](./packages/mldsa87/README.md#secret-key-validation).
+
 ### Signing Modes (ML-DSA-87 and Dilithium5)
 
 Both `cryptoSignSignature` (detached) and `cryptoSign` (attached) take an explicit `randomizedSigning: boolean` parameter:

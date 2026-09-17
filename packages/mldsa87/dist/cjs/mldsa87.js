@@ -2031,6 +2031,17 @@ function cryptoSignKeypair(passedSeed, pk, sk) {
   }
 }
 
+// Bound on the FIPS 204 Algorithm 7 rejection loop. Each attempt is accepted
+// with probability about 0.26 (3.85 expected attempts, FIPS 204 Table 2), and
+// that probability does not depend on the key as long as s1 and s2 are in
+// range, which secretKeyVecsInRange guarantees. The chance that a valid key
+// needs more than 1024 attempts is below 0.74^1024 < 2^-440, so the bound
+// never fires in honest use. It exists so that a secret key whose other
+// fields are adversarial (a t0 chosen so that most attempts need more than
+// OMEGA hints) throws instead of spinning. go-qrllib and rust-qrllib use
+// the same bound.
+const SIGN_MAX_ATTEMPTS = 1024;
+
 /**
  * Create a detached signature for a message with context.
  *
@@ -2071,6 +2082,8 @@ function cryptoSignKeypair(passedSeed, pk, sk) {
  * @throws {TypeError} If randomizedSigning is not a boolean
  * @throws {Error} If ctx exceeds 255 bytes
  * @throws {Error} If sk length does not equal CryptoSecretKeyBytes
+ * @throws {Error} If an s1 or s2 coefficient of sk is outside [-ETA, ETA] (see [validateSecretKey])
+ * @throws {Error} If no signature is accepted within 1024 attempts (never for a key from [cryptoSignKeypair])
  * @throws {Error} If message is not a Uint8Array or valid hex string
  *
  * @example
@@ -2116,6 +2129,9 @@ function cryptoSignSignature(sig, m, sk, randomizedSigning, ctx) {
 
   try {
     unpackSk(rho, tr, key, t0, s1, s2, sk);
+    if (!secretKeyVecsInRange(s1, s2)) {
+      throw new Error('invalid sk: an s1 or s2 coefficient is outside [-ETA, ETA] (invalid-sk-encoding)');
+    }
 
     // pre = 0x00 || len(ctx) || ctx
     const pre = new Uint8Array(2 + ctx.length);
@@ -2138,7 +2154,7 @@ function cryptoSignSignature(sig, m, sk, randomizedSigning, ctx) {
     polyVecKNTT(s2);
     polyVecKNTT(t0);
 
-    while (true) {
+    for (let attempt = 0; attempt < SIGN_MAX_ATTEMPTS; ++attempt) {
       polyVecLUniformGamma1(y, rhoPrime, nonce++);
       // Matrix-vector multiplication
       z.copy(y);
@@ -2182,9 +2198,10 @@ function cryptoSignSignature(sig, m, sk, randomizedSigning, ctx) {
       polyVecKPointWisePolyMontgomery(h, cp, t0);
       polyVecKInvNTTToMont(h);
       polyVecKReduce(h);
-      // Statistically rare rejection (depends on key/challenge interaction);
-      // no deterministic trigger is known, so it is exercised by long fuzz
-      // campaigns rather than unit vectors.
+      // Unreachable for any decodable t0: each coefficient of c*t0 is a sum
+      // of TAU terms of magnitude at most 2^(D-1), so its norm is at most
+      // TAU*2^(D-1) = 245760 < GAMMA2 = 261888. Kept as written in FIPS 204
+      // Algorithm 7.
       /* c8 ignore start */
       if (polyVecKChkNorm(h, GAMMA2) !== 0) {
         continue;
@@ -2193,16 +2210,22 @@ function cryptoSignSignature(sig, m, sk, randomizedSigning, ctx) {
 
       polyVecKAdd(w0, w0, h);
       const n = polyVecKMakeHint(h, w0, w1);
-      // Statistically rare rejection — same rationale as the ct0 check above.
-      /* c8 ignore start */
       if (n > OMEGA) {
         continue;
       }
-      /* c8 ignore stop */
 
       packSig(sig, ctilde, z, h);
       return 0;
     }
+    /* c8 ignore start */
+    // Every attempt was rejected. Not reachable by test: for a generated key
+    // this is a below-2^-440 event, and the one field a caller can shape,
+    // t0, only raises the hint count to about 100 per attempt against
+    // OMEGA = 75, so even then about 1 attempt in 100 is accepted and 1024
+    // attempts fail with probability below 2^-10. The bound keeps signing
+    // time finite for such a key instead of open-ended.
+    throw new Error(`signing failed: no signature accepted within ${SIGN_MAX_ATTEMPTS} attempts`);
+    /* c8 ignore stop */
   } finally {
     zeroize(key);
     zeroize(rhoPrime);
@@ -2558,6 +2581,93 @@ function validatePublicKey(pk) {
   return { ok: true };
 }
 
+// s1 and s2 travel in the packed secret key (rho || K || tr || s1 || s2 || t0)
+// as 3-bit fields holding ETA - v, so 0..2*ETA are the only encodings key
+// generation writes; 5, 6 and 7 decode to -3, -4 and -5. t0 has no invalid
+// encoding (every 13-bit field decodes into the Power2Round range) and rho,
+// K and tr are opaque bytes, so this is the whole of what can be checked
+// without recomputing the public key. An out-of-range s1 or s2 breaks the
+// ||z|| < GAMMA1 - BETA bound the rejection loop relies on, and with it the
+// zero-knowledge property of the signature. go-qrllib and rust-qrllib apply
+// the same check.
+const SECRET_KEY_VECS_OFFSET = 2 * SeedBytes + TRBytes;
+
+/**
+ * Report whether every coefficient of s1 and s2 lies in [-ETA, ETA].
+ * Branch-free: (v + ETA) | (ETA - v) is negative exactly when v is out of
+ * range, and the sign bits are OR-ed so the scan never stops early.
+ *
+ * @param {PolyVecL} s1
+ * @param {PolyVecK} s2
+ * @returns {boolean}
+ */
+function secretKeyVecsInRange(s1, s2) {
+  let bad = 0;
+  for (let i = 0; i < L; ++i) {
+    const { coeffs } = s1.vec[i];
+    for (let j = 0; j < N; ++j) {
+      const v = coeffs[j];
+      bad |= (v + ETA) | (ETA - v);
+    }
+  }
+  for (let i = 0; i < K; ++i) {
+    const { coeffs } = s2.vec[i];
+    for (let j = 0; j < N; ++j) {
+      const v = coeffs[j];
+      bad |= (v + ETA) | (ETA - v);
+    }
+  }
+  return bad >= 0;
+}
+
+/**
+ * Check a packed ML-DSA-87 secret key before signing with it.
+ *
+ * The check is the one every signing function applies: every coefficient of
+ * s1 and s2 must lie in [-ETA, ETA]. Keys from [cryptoSignKeypair] always
+ * pass; the 3-bit encodings 5, 6 and 7 never come from key generation and
+ * make signing throw. rho, K, tr and t0 are not examined, as they have no
+ * invalid encoding. See the package README under "Secret Key Validation".
+ *
+ * Never throws. Type and length problems come back as reasons, the scan
+ * reads every coefficient regardless of content, and the unpacked
+ * coefficients are zeroed before returning.
+ *
+ * @param {unknown} sk - Packed secret key candidate
+ * @returns {{ok: true} | {ok: false, reason: 'invalid-sk-type'|'invalid-sk-length'|'invalid-sk-encoding'}}
+ *
+ * @example
+ * const check = validateSecretKey(sk);
+ * if (!check.ok) {
+ *   throw new Error(`rejected secret key: ${check.reason}`);
+ * }
+ */
+function validateSecretKey(sk) {
+  if (!(sk instanceof Uint8Array)) {
+    return { ok: false, reason: 'invalid-sk-type' };
+  }
+  if (sk.length !== CryptoSecretKeyBytes) {
+    return { ok: false, reason: 'invalid-sk-length' };
+  }
+  const s1 = new PolyVecL();
+  const s2 = new PolyVecK();
+  try {
+    for (let i = 0; i < L; ++i) {
+      polyEtaUnpack(s1.vec[i], sk, SECRET_KEY_VECS_OFFSET + i * PolyETAPackedBytes);
+    }
+    for (let i = 0; i < K; ++i) {
+      polyEtaUnpack(s2.vec[i], sk, SECRET_KEY_VECS_OFFSET + (L + i) * PolyETAPackedBytes);
+    }
+    if (!secretKeyVecsInRange(s1, s2)) {
+      return { ok: false, reason: 'invalid-sk-encoding' };
+    }
+    return { ok: true };
+  } finally {
+    zeroizePolyVec(s1);
+    zeroizePolyVec(s2);
+  }
+}
+
 exports.BETA = BETA;
 exports.CRHBytes = CRHBytes;
 exports.CTILDEBytes = CTILDEBytes;
@@ -2684,6 +2794,7 @@ exports.unpackSig = unpackSig;
 exports.unpackSk = unpackSk;
 exports.useHint = useHint;
 exports.validatePublicKey = validatePublicKey;
+exports.validateSecretKey = validateSecretKey;
 exports.zeroize = zeroize;
 exports.zeroizePolyVec = zeroizePolyVec;
 exports.zetas = zetas;

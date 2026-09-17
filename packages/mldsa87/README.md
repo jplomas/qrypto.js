@@ -112,6 +112,7 @@ Create a detached signature.
 - `randomized`: `boolean` - `true` for hedged, `false` for deterministic
 - `context`: `Uint8Array` - context string for domain separation, 0-255 bytes
 - Returns: `0` on success
+- Throws: `Error` if `sk` has an s1 or s2 coefficient outside `[-2, 2]` (see [Secret Key Validation](#secret-key-validation)), or if no signature is accepted within 1024 attempts, which does not happen for a key from `cryptoSignKeypair`
 
 #### `cryptoSignVerify(sig, message, pk, context)`
 
@@ -131,6 +132,14 @@ Check a public key before verifying with it. Not part of FIPS 204; see [Public K
 
 - `pk`: any value
 - Returns: `{ ok: true }`, or `{ ok: false, reason }` where `reason` is `'invalid-pk-type'`, `'invalid-pk-length'` or `'weak-public-key'`
+- Never throws
+
+#### `validateSecretKey(sk)`
+
+Check a secret key before signing with it. Every signing function runs the same check; see [Secret Key Validation](#secret-key-validation).
+
+- `sk`: any value
+- Returns: `{ ok: true }`, or `{ ok: false, reason }` where `reason` is `'invalid-sk-type'`, `'invalid-sk-length'` or `'invalid-sk-encoding'`
 - Never throws
 
 #### `zeroize(buffer)`
@@ -205,6 +214,26 @@ tested against the same vector file,
 `test/vectors/weak_public_key_vectors.json`, so a key is accepted or
 rejected on every QRL client alike.
 
+## Secret Key Validation
+
+A packed secret key is `rho || K || tr || s1 || s2 || t0`. The s1 and s2
+coefficients are stored as 3-bit fields holding `2 - v`, so 0 to 4 are the
+only encodings key generation writes; 5, 6 and 7 decode to -3, -4 and -5.
+A coefficient outside `[-2, 2]` breaks the `||z|| < GAMMA1 - BETA` bound
+the signing loop relies on, and with it the zero-knowledge property of the
+signature, so every signing function checks s1 and s2 after unpacking and
+throws on such a key. `validateSecretKey` is the same check ahead of time
+and reports `'invalid-sk-encoding'`. `rho`, `K`, `tr` and `t0` have no
+invalid encoding and are not examined. Keys from `cryptoSignKeypair`
+always pass.
+
+Signing is also bounded to 1024 attempts of the FIPS 204 rejection loop.
+A key that passes the check is accepted about once in four attempts, so
+for it the bound is a below-2^-440 event; it is there for a `t0` shaped to
+demand more than OMEGA hints on most attempts, which then throws instead
+of running open-ended. go-qrllib and rust-qrllib apply the same check and
+bound.
+
 ## Interoperability
 
 Both this library and go-qrllib process ML-DSA-87 seeds identically. Raw seeds produce matching keys:
@@ -236,6 +265,7 @@ See [SECURITY.md](../../SECURITY.md) for important information about:
 - **Signing timing variability** — signing is not constant-time due to the algorithm's rejection sampling loop; see SECURITY.md for measured impact and deployment mitigations
 - Secure key handling recommendations
 - **Public key validation:** `cryptoSignVerify` does not reject weak keys, as FIPS 204 requires; check keys you receive with `validatePublicKey` (see above)
+- **Secret key validation:** signing throws on an `sk` whose s1 or s2 encoding is out of range; `validateSecretKey` is the same check ahead of time (see above)
 
 ## Requirements
 

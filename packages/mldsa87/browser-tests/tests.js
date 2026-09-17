@@ -10,3 +10,4 @@ import '../test/sign.test.js';
 import '../test/symmetric-shake.test.js';
 import '../test/utils.test.js';
 import '../test/validate-public-key.test.js';
+import '../test/validate-secret-key.test.js';

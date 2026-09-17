@@ -59,6 +59,18 @@ describe('dist bundle smoke tests', () => {
       `);
       expect(stdout.trim()).to.equal('true');
     });
+
+    it('exports validateSecretKey: accepts a generated key, rejects an out-of-range s1 field', async () => {
+      const { stdout } = await run(`
+        import { validateSecretKey, cryptoSignKeypair, CryptoPublicKeyBytes, CryptoSecretKeyBytes, SeedBytes, TRBytes } from './dist/mjs/mldsa87.js';
+        const sk = new Uint8Array(CryptoSecretKeyBytes);
+        cryptoSignKeypair(new Uint8Array(SeedBytes), new Uint8Array(CryptoPublicKeyBytes), sk);
+        const okBefore = validateSecretKey(sk).ok === true;
+        sk[2 * SeedBytes + TRBytes] |= 7; // first s1 coefficient: field 7 decodes to -5
+        console.log(okBefore && validateSecretKey(sk).reason === 'invalid-sk-encoding');
+      `);
+      expect(stdout.trim()).to.equal('true');
+    });
   });
 
   describe('CJS (dist/cjs/mldsa87.js)', () => {
@@ -102,6 +114,21 @@ describe('dist bundle smoke tests', () => {
         const weak = validatePublicKey(pk).reason === 'weak-public-key';
         cryptoSignKeypair(new Uint8Array(SeedBytes), pk, new Uint8Array(CryptoSecretKeyBytes));
         console.log(weak && validatePublicKey(pk).ok === true);
+      `,
+        { cjs: true }
+      );
+      expect(stdout.trim()).to.equal('true');
+    });
+
+    it('exports validateSecretKey: accepts a generated key, rejects an out-of-range s1 field', async () => {
+      const { stdout } = await run(
+        `
+        const { validateSecretKey, cryptoSignKeypair, CryptoPublicKeyBytes, CryptoSecretKeyBytes, SeedBytes, TRBytes } = require('./dist/cjs/mldsa87.js');
+        const sk = new Uint8Array(CryptoSecretKeyBytes);
+        cryptoSignKeypair(new Uint8Array(SeedBytes), new Uint8Array(CryptoPublicKeyBytes), sk);
+        const okBefore = validateSecretKey(sk).ok === true;
+        sk[2 * SeedBytes + TRBytes] |= 7; // first s1 coefficient: field 7 decodes to -5
+        console.log(okBefore && validateSecretKey(sk).reason === 'invalid-sk-encoding');
       `,
         { cjs: true }
       );
