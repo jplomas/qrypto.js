@@ -16,6 +16,7 @@ import {
   cryptoSignVerify,
   cryptoSignOpen,
   cryptoSignOpenWithReason,
+  validatePublicKey,
   zeroize,
   isZero,
   CryptoPublicKeyBytes,
@@ -23,7 +24,7 @@ import {
   CryptoBytes,
   SeedBytes,
 } from '@theqrl/mldsa87';
-import type { CryptoSignOpenReason } from '@theqrl/mldsa87';
+import type { CryptoSignOpenReason, ValidatePublicKeyReason } from '@theqrl/mldsa87';
 
 // Byte-size constants are typed `number`.
 const _pkBytes: number = CryptoPublicKeyBytes;
@@ -80,6 +81,24 @@ if (wr.ok) {
   void reason;
   void _reasons;
 }
+
+// validatePublicKey: takes `unknown` (never throws), returns a discriminated
+// union whose ok-arm carries no `reason`.
+const vpk = validatePublicKey(pk);
+if (vpk.ok) {
+  const _isOk: true = vpk.ok;
+  // @ts-expect-error — the ok arm has no `reason` property.
+  const _noReason: unknown = vpk.reason;
+  void [_isOk, _noReason];
+} else {
+  const vreason: ValidatePublicKeyReason = vpk.reason;
+  const _vreasons: ValidatePublicKeyReason[] = ['invalid-pk-type', 'invalid-pk-length', 'weak-public-key'];
+  void [vreason, _vreasons];
+}
+validatePublicKey(null);
+validatePublicKey(undefined);
+validatePublicKey('not a key');
+validatePublicKey([1, 2, 3]);
 
 // Security utilities.
 zeroize(sk);

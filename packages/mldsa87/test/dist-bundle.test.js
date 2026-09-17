@@ -48,6 +48,17 @@ describe('dist bundle smoke tests', () => {
       `);
       expect(stdout.trim()).to.equal('true');
     });
+
+    it('exports validatePublicKey: rejects the all-zero key, accepts a generated key', async () => {
+      const { stdout } = await run(`
+        import { validatePublicKey, cryptoSignKeypair, CryptoPublicKeyBytes, CryptoSecretKeyBytes, SeedBytes } from './dist/mjs/mldsa87.js';
+        const pk = new Uint8Array(CryptoPublicKeyBytes);
+        const weak = validatePublicKey(pk).reason === 'weak-public-key';
+        cryptoSignKeypair(new Uint8Array(SeedBytes), pk, new Uint8Array(CryptoSecretKeyBytes));
+        console.log(weak && validatePublicKey(pk).ok === true);
+      `);
+      expect(stdout.trim()).to.equal('true');
+    });
   });
 
   describe('CJS (dist/cjs/mldsa87.js)', () => {
@@ -77,6 +88,20 @@ describe('dist bundle smoke tests', () => {
         const ctx = new Uint8Array([0x5a, 0x4f, 0x4e, 0x44]);
         cryptoSignSignature(sig, msg, sk, false, ctx);
         console.log(cryptoSignVerify(sig, msg, pk, ctx));
+      `,
+        { cjs: true }
+      );
+      expect(stdout.trim()).to.equal('true');
+    });
+
+    it('exports validatePublicKey: rejects the all-zero key, accepts a generated key', async () => {
+      const { stdout } = await run(
+        `
+        const { validatePublicKey, cryptoSignKeypair, CryptoPublicKeyBytes, CryptoSecretKeyBytes, SeedBytes } = require('./dist/cjs/mldsa87.js');
+        const pk = new Uint8Array(CryptoPublicKeyBytes);
+        const weak = validatePublicKey(pk).reason === 'weak-public-key';
+        cryptoSignKeypair(new Uint8Array(SeedBytes), pk, new Uint8Array(CryptoSecretKeyBytes));
+        console.log(weak && validatePublicKey(pk).ok === true);
       `,
         { cjs: true }
       );

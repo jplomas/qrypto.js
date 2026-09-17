@@ -125,6 +125,14 @@ Verify a detached signature.
 
 **Note:** To sign or verify plain text, convert it to bytes (e.g., `new TextEncoder().encode('Hello')`). String inputs are interpreted as hex only.
 
+#### `validatePublicKey(pk)`
+
+Check a public key before verifying with it. Not part of FIPS 204; see [Public Key Validation](#public-key-validation).
+
+- `pk`: any value
+- Returns: `{ ok: true }`, or `{ ok: false, reason }` where `reason` is `'invalid-pk-type'`, `'invalid-pk-length'` or `'weak-public-key'`
+- Never throws
+
 #### `zeroize(buffer)`
 
 Zero out sensitive data (best-effort, see security notes).
@@ -139,6 +147,63 @@ Check if buffer is all zeros (constant-time).
 - `buffer`: `Uint8Array` - the buffer to check
 - Returns: `true` if all bytes are zero
 - Throws: `TypeError` if buffer is not a `Uint8Array`
+
+## Public Key Validation
+
+A weak key is a public key under which the verifier accepts a signature
+anyone can compute from the key alone. Key generation never produces one,
+but a key that arrives from outside can have any shape, so check keys you
+receive before verifying with them:
+
+```javascript
+import { validatePublicKey, cryptoSignVerify } from '@theqrl/mldsa87';
+
+const check = validatePublicKey(pk); // never throws
+if (!check.ok) {
+  // reason: 'invalid-pk-type' | 'invalid-pk-length' | 'weak-public-key'
+  throw new Error(`rejected public key: ${check.reason}`);
+}
+const valid = cryptoSignVerify(sig, message, pk, ctx);
+```
+
+The rule: a packed key is `rho || t1`, and `t1` holds 2048 coefficients of
+10 bits each. A coefficient `v` is large when `96 <= v <= 415` or
+`608 <= v <= 927`. The key is weak unless at least 76 of its coefficients
+are large. `rho` is not examined.
+
+Where the numbers come from: the verifier recomputes
+`w1' = UseHint(h, A·z - c·2^13·t1)` and accepts when hashing `w1'` with the
+message reproduces the challenge `c`. With `z = 0` and no hints that value
+is `-c·2^13·t1`, so if every coefficient of `c·2^13·t1`, centered modulo
+`q = 8380417`, has HighBits zero, the signature
+`(z = 0, h = 0, c~ = SHAKE256(mu || w1Encode(0)))` verifies on any message.
+Two shapes of `t1` allow that. Small residues: `2^13·v mod q` is small when
+`v` is near 0 and also when `v` is near 1023, because `2^13·1023 = q - 1`.
+The 2^-1 family: `2^13·512 mod q` equals `2^-1·(2^13 - 1)`, and since the
+challenge has 60 coefficients of ±1, `c` times a polynomial of all 512s has
+only even coefficients, the 2^-1 cancels, and every product coefficient is
+at most `30·8191`, below GAMMA2 = 261888; coefficients from 464 to 559
+behave the same way, and 416 to 607 come within reach of hints. A
+coefficient counts as large when, under both readings, each challenge tap
+moves the result by more than `3·GAMMA2`, two HighBits bands away from
+zero and beyond what a hint can repair. That gives
+`96 = floor(3·GAMMA2 / 2^13) + 1`, `415 = floor((q - 6·GAMMA2) / 2^14)`,
+`608 = ceil((q + 6·GAMMA2) / 2^14)` and
+`927 = ceil((q - 3·GAMMA2) / 2^13) - 1`. The verifier accepts at most
+OMEGA = 75 hints, so 76 large coefficients is one more than it can
+correct. A generated key has about 1280 large coefficients (the expected
+fraction is 0.625, and the lowest seen over 500 keys was 1230), so the
+chance of rejecting an honest key is below 2^-800.
+
+`cryptoSignVerify` and `cryptoSignOpen` do not apply this check. FIPS 204
+Algorithm 8 has no key-validity step, and the C2SP/wycheproof vectors this
+package is tested against include `valid` signatures under the all-zero
+key (tcId 66 and 174) and under the all-1023 key (tcId 240);
+`test/wycheproof.test.js` pins that.
+go-qrllib, rust-qrllib and `@theqrl/wallet.js` apply the same rule and are
+tested against the same vector file,
+`test/vectors/weak_public_key_vectors.json`, so a key is accepted or
+rejected on every QRL client alike.
 
 ## Interoperability
 
@@ -170,6 +235,7 @@ See [SECURITY.md](../../SECURITY.md) for important information about:
 - Constant-time verification
 - **Signing timing variability** — signing is not constant-time due to the algorithm's rejection sampling loop; see SECURITY.md for measured impact and deployment mitigations
 - Secure key handling recommendations
+- **Public key validation:** `cryptoSignVerify` does not reject weak keys, as FIPS 204 requires; check keys you receive with `validatePublicKey` (see above)
 
 ## Requirements
 

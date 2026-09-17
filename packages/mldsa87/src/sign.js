@@ -40,15 +40,19 @@ import {
   CryptoBytes,
   CryptoPublicKeyBytes,
   CryptoSecretKeyBytes,
+  D,
   GAMMA1,
   GAMMA2,
   K,
   L,
+  N,
   OMEGA,
+  PolyT1PackedBytes,
   PolyW1PackedBytes,
+  Q,
   SeedBytes,
 } from './const.js';
-import { Poly, polyChallenge, polyNTT } from './poly.js';
+import { Poly, polyChallenge, polyNTT, polyT1Unpack } from './poly.js';
 import { packPk, packSig, packSk, unpackPk, unpackSig, unpackSk } from './packing.js';
 import { zeroize, zeroizePolyVec } from './utils.js';
 
@@ -666,4 +670,74 @@ export function cryptoSignOpenWithReason(sm, pk, ctx) {
     return { ok: false, reason: 'verification-failed' };
   }
   return { ok: true, message: msg };
+}
+
+// Public-key validation bounds, derived from the parameter set.
+//
+// A t1 coefficient v (10 bits, 0..1023) is "large" when each challenge tap
+// moves c*2^D*t1 by more than 3*GAMMA2 under both readings available to an
+// attacker: as 2^D*v centered modulo Q, which is small for v near 0 and for
+// v near 1023 (2^D*1023 = Q - 1); and as (2^(D+1)*v centered modulo Q)/2,
+// which is small for v near 512 because 2^(D+1)*512 = 2^D - 1 (mod Q) and
+// c*(1 + x + ... + x^255) always has even coefficients (60 taps of +-1 sum
+// to an even number), so the halving is real. 3*GAMMA2 is two HighBits bands
+// from zero, beyond what a hint corrects, and the verifier accepts at most
+// OMEGA hints, so OMEGA + 1 large coefficients is more than it can repair.
+// go-qrllib, rust-qrllib and wallet.js apply the same rule and are tested
+// against the same vector file (test/vectors/weak_public_key_vectors.json).
+const T1_LARGE_LOW = Math.floor((3 * GAMMA2) / (1 << D)) + 1; // 96
+const T1_LARGE_HIGH_BELOW_HALF = Math.floor((Q - 6 * GAMMA2) / (1 << (D + 1))); // 415
+const T1_LARGE_LOW_ABOVE_HALF = Math.ceil((Q + 6 * GAMMA2) / (1 << (D + 1))); // 608
+const T1_LARGE_HIGH = Math.ceil((Q - 3 * GAMMA2) / (1 << D)) - 1; // 927
+const T1_MIN_LARGE = OMEGA + 1; // 76
+
+/**
+ * Check a packed ML-DSA-87 public key before verifying with it.
+ *
+ * A weak key is one under which the verifier accepts a signature anyone can
+ * compute from the key alone. Key generation never produces one, and FIPS
+ * 204 requires [cryptoSignVerify] and [cryptoSignOpen] to accept it, so the
+ * check is separate; call it on keys you receive. The rule (at least 76 of
+ * the 2048 t1 coefficients in [96, 415] or [608, 927]) and its derivation
+ * are in the package README under "Public Key Validation".
+ *
+ * Never throws. Type and length problems come back as reasons, and the
+ * coefficient scan reads every coefficient regardless of content.
+ *
+ * @param {unknown} pk - Packed public key candidate (rho || t1)
+ * @returns {{ok: true} | {ok: false, reason: 'invalid-pk-type'|'invalid-pk-length'|'weak-public-key'}}
+ *
+ * @example
+ * const check = validatePublicKey(pk);
+ * if (!check.ok) {
+ *   throw new Error(`rejected public key: ${check.reason}`);
+ * }
+ * const isValid = cryptoSignVerify(signature, message, pk, ctx);
+ */
+export function validatePublicKey(pk) {
+  if (!(pk instanceof Uint8Array)) {
+    return { ok: false, reason: 'invalid-pk-type' };
+  }
+  if (pk.length !== CryptoPublicKeyBytes) {
+    return { ok: false, reason: 'invalid-pk-length' };
+  }
+  // Only t1 (pk[SeedBytes..]) matters; rho is a matrix seed and any value is
+  // fine. Count the large coefficients with a branch-free accumulator: every
+  // coefficient is unpacked and tested against both bands, no early exit.
+  const t1 = new Poly();
+  let large = 0;
+  for (let i = 0; i < K; ++i) {
+    polyT1Unpack(t1, pk, SeedBytes + i * PolyT1PackedBytes);
+    for (let j = 0; j < N; ++j) {
+      const v = t1.coeffs[j];
+      // (a - b) >>> 31 is 1 exactly when a < b (all operands fit in 31 bits).
+      const below = ((T1_LARGE_LOW - 1 - v) >>> 31) & ((v - T1_LARGE_HIGH_BELOW_HALF - 1) >>> 31);
+      const above = ((T1_LARGE_LOW_ABOVE_HALF - 1 - v) >>> 31) & ((v - T1_LARGE_HIGH - 1) >>> 31);
+      large += below | above;
+    }
+  }
+  if (large < T1_MIN_LARGE) {
+    return { ok: false, reason: 'weak-public-key' };
+  }
+  return { ok: true };
 }

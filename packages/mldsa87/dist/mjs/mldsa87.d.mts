@@ -185,6 +185,26 @@ export function cryptoSignOpenWithReason(
   | { ok: true; message: Uint8Array }
   | { ok: false; reason: CryptoSignOpenReason };
 
+/** Reason `validatePublicKey` gives when it rejects a key. */
+export type ValidatePublicKeyReason =
+  | 'invalid-pk-type'
+  | 'invalid-pk-length'
+  | 'weak-public-key';
+
+/**
+ * Check a packed ML-DSA-87 public key before verifying with it. A weak key
+ * is one under which the verifier accepts a signature anyone can compute;
+ * key generation never produces one, and FIPS 204 requires
+ * `cryptoSignVerify` / `cryptoSignOpen` to accept it, so the check is
+ * separate. The rule and its derivation are in the package README under
+ * "Public Key Validation". Never throws.
+ *
+ * @param pk - Any value. Non-`Uint8Array` input yields `invalid-pk-type`.
+ */
+export function validatePublicKey(
+  pk: unknown
+): { ok: true } | { ok: false; reason: ValidatePublicKeyReason };
+
 // Utility functions
 
 /**
